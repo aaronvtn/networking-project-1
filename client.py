@@ -1,23 +1,26 @@
 # Client code
 from socket import *
 
-# Name and port number of the server to connect to
-server_name = "ecs.fullerton.edu"
-server_port = 12000
 
-# Create a socket
-client_socket = socket(AF_INET, SOCK_STREAM)
+if __name__ == "__main__":
 
-# Connect to the server
-client_socket.connect((server_name, server_port))
+    # Name and port number of the server to connect to
+    server_name = "127.0.0.1"
+    server_port = 12000
 
-# String we want to send to the server
-data = "Hello world! This is a very long string"
+    # Create a socket
+    client_socket = socket(AF_INET, SOCK_STREAM)
 
-bytes_sent = 0
+    # Connect to the server
+    client_socket.connect((server_name, server_port))
 
-# Keep sending bytes until all bytes are sent
-while bytes_sent != len(data):
-    bytes_send += client_socket.send(data[bytes_sent:])
+    # String we want to send to the server
+    data = "Hello world! This is a very long string"
 
-client_socket.close()
+    bytes_sent = 0
+
+    # Keep sending bytes until all bytes are sent
+    while bytes_sent != len(data):
+        bytes_sent += client_socket.send(data[bytes_sent:].encode())
+
+    client_socket.close()
