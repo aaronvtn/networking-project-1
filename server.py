@@ -1,78 +1,88 @@
-# Server code
+# sServer code
 from socket import *
 import sys
+import os
+
+def recvAll(sock, numBytes):
+    recvBuff = b''
+    while len(recvBuff) < numBytes:
+        tmpBuff = sock.recv(numBytes - len(recvBuff))
+        if not tmpBuff:
+            break
+        recvBuff += tmpBuff
+    return recvBuff
+
+def recvHeader(sock):
+    sizeHeader = recvAll(sock, 10)
+    if not sizeHeader:
+        return None
+    dataSize = int(sizeHeader.decode())
+    return recvAll(sock, dataSize)
+
+def sendHeader(sock, dataBytes):
+    sizeHeader = str(len(dataBytes)).zfill(10).encode()
+    sock.sendall(sizeHeader + dataBytes)
 
 if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        sys.exit("Using: python {sys.argv[0]} <PORT>")
 
-    # Localhost
-    server_host = "127.0.0.1"
+    serverHost = ""
+    serverPort = int(sys.argv[1])
+    welcomeSock = socket(AF_INET, SOCK_STREAM)
+    welcomeSock.bind((serverHost, serverPort))
+    welcomeSock.listen(1)
+    print("Server is ready.")
 
-    # Listen port
-    server_port = 12000
+    clientSock, addr = welcomeSock.accept()
+    print(f"Connection from {addr} to control.")
 
-    # Creating a TCP socket
-    server_socket = socket(AF_INET, SOCK_STREAM)
+    while True:
+        cmd = clientSock.recv(1024).decode().strip()
+        if not cmd:
+            break
 
-    # Binding socket to local host and port
-    server_socket.bind((server_host, server_port))
+        parts = cmd.split()
+        if parts[0] == "quit":
+            print("Client disconnected.")
+            break
 
-    # Start listening for incoming connections
-    server_socket.listen(1)
-    print("The server is ready to receive!")
+        elif parts[0] == "ls":
+            dataPort = int(parts[1])
+            connSock = socket(AF_INET, SOCK_STREAM)
+            connSock.connect((addr[0], dataPort))
 
+            file = "\n".join(os.listdir('.')).encode()
+            sendHeader(connSock, file)
+            connSock.close()
+            print("File list printed.")
 
-    # Define a function to receive all bytes from client
-    def recv_all(socket, num_bytes):
-        # The buffer
-        recv_buff = ""
-        
-        # The temporary buffer
-        tmp_buff = ""
-        
-        # Keep receiving until all is received
-        while len(recv_buff) < num_bytes:
-            
-            # Attempt to receive bytes
-            tmp_buff = socket.recv(num_bytes)
-            
-            # The other side has closed the socket
-            if not tmp_buff:
-                break
-            
-            # Add the received bytes to the buffer
-            if type(tmp_buff) == bytes:
-                tmp_buff = tmp_buff.decode('utf-8')
+        elif parts[0] == "get":
+            fileName = parts[1]
+            dataPort = int(parts[2])
+            connSock = socket(AF_INET, SOCK_STREAM)
+            connSock.connect((addr[0], dataPort))
+            try:
+                with open(fileName, 'rb') as my_file:    #rb for raw bytes
+                    fileData = my_file.read()
+                sendHeader(connSock, fileData)
+                print(f"Sent {fileName} which is {len(fileData)} bytes.")
+            except FileNotFoundError:
+                sendHeader(connSock, b'')
+                print("Unable to find file. Please try again.")
+            connSock.close()
 
-            recv_buff += tmp_buff
-        
-        return recv_buff
+        elif parts[0] == "put":
+            fileName = parts[1]
+            dataPort = int(parts[2])
+            connSock = socket(AF_INET, SOCK_STREAM)
+            connSock.connect((addr[0], dataPort))
+            fileData = recvHeader(connSock)
+            with open(fileName, 'wb') as my_file:
+                my_file.write(fileData)
+            print(f"Received {fileName} which is {len(fileData)} bytes")
+            connSock.close()
 
+    clientSock.close()
+    welcomeSock.close()
 
-    # Continually accept incoming connections
-    while(True):
-        # Accept a connection and get client's socket
-        connection_socket, addr = server_socket.accept()
-        print(f"Connected by {addr}\n")
-
-        # Buffer for all data received from client
-        file_data = ""
-        # Size of the incoming file as marked in the size header
-        file_size = 0
-        # Buffer containing the file size
-        file_size_buff = ""
-
-        # Receive the first 10 bytes indicating the size of the file
-        file_size_buff = recv_all(connection_socket, 10)
-            
-        # Get the file size
-        file_size = int(file_size_buff)
-        
-        
-        print(f'The file size is {file_size}')
-        # Get the file data
-        file_data = recv_all(connection_socket, file_size)
-        print(f'The file data is:\n{file_data}')
-            
-        # Close our side
-        connection_socket.close()
-        sys.exit()
